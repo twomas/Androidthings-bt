@@ -12,10 +12,15 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.text.format.DateFormat;
 import android.util.Log;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -45,13 +50,11 @@ public class MainActivity extends Activity {
         mScanCallback = new ScanCallback() {
             @Override
             public void onScanResult(int callbackType, ScanResult result) {
-                //Log.d(TAG, "onScanResult");
                 processResult(result);
             }
 
             @Override
             public void onBatchScanResults(List<ScanResult> results) {
-                //Log.d(TAG, "onBatchScanResults: "+results.size()+" results");
                 for (ScanResult result : results) {
                     processResult(result);
                 }
@@ -59,11 +62,10 @@ public class MainActivity extends Activity {
 
             @Override
             public void onScanFailed(int errorCode) {
-                //Log.w(TAG, "LE Scan Failed: "+errorCode);
             }
 
             private void processResult(ScanResult result) {
-                //Log.i(TAG, "New LE Device: " + result.getDevice().getName() + " @ " + result.getRssi());
+                //Log.i(TAG, result.toString());
 
                 final BluetoothDevice device = result.getDevice();
                 processScanResult(device, result.getRssi(), result.getScanRecord().getBytes());
@@ -72,7 +74,9 @@ public class MainActivity extends Activity {
     }
 
     private void processScanResult(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-        Log.v(TAG, "processScanResult " + device.getAddress() + " " + device.getName() + " rssi: " + Integer.valueOf(rssi));
+        String str = "processScanResult " + device.getAddress() + " " + device.getName() + " rssi: " + Integer.valueOf(rssi);
+        Log.v(TAG, str);
+        writeToFile(this, "scan.txt", str + "\n");
     }
 
     @Override
@@ -91,6 +95,7 @@ public class MainActivity extends Activity {
                 .build();
 
         mBluetoothLeScanner.startScan(null, settings, mScanCallback);
+        writeToFile(this, "scan.txt", "startScan" + "\n");
     }
 
     private void loadPermissions(String perm,int requestCode) {
@@ -117,5 +122,23 @@ public class MainActivity extends Activity {
 
         }
 
+    }
+
+    public void writeToFile(Context context, String filename, String body) {
+        try {
+            String date = (DateFormat.format("yyyy-MM-dd HH:mm:ss", new java.util.Date()).toString());
+            String str = date + " " + body;
+            File root = new File(Environment.getExternalStorageDirectory(), "bcab-bt");
+            if (!root.exists()) {
+                root.mkdirs();
+            }
+            File file = new File(root, filename);
+            FileWriter writer = new FileWriter(file,true);
+            writer.append(str);
+            writer.flush();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

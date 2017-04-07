@@ -1,0 +1,1 @@
+adb shell rm /sdcard/bcab-bt/scan.txt

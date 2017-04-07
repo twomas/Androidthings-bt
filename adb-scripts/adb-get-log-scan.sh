@@ -1,0 +1,1 @@
+adb pull /sdcard/bcab-bt/scan.txt
