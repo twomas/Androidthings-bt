@@ -10,8 +10,10 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -21,6 +23,7 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,10 +33,12 @@ import java.util.List;
 public class MainActivity extends Activity {
     private static final String TAG = MainActivity.class.getSimpleName();
 
-    private BluetoothAdapter mBluetoothAdapter;
-    private BluetoothLeScanner mBluetoothLeScanner;
-    private ScanCallback mScanCallback;
+    private BluetoothAdapter mBluetoothAdapter = null;
+    private BluetoothLeScanner mBluetoothLeScanner = null;
+    private ScanCallback mScanCallback = null;
     private static final int REQUEST_FINE_LOCATION=0;
+    private ArrayList<BluetoothDevice> mDevices;
+    private CountDownTimer mCountDownTimer = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,6 +49,11 @@ public class MainActivity extends Activity {
                 (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
         mBluetoothAdapter = bluetoothManager.getAdapter();
         mBluetoothLeScanner = mBluetoothAdapter.getBluetoothLeScanner();
+
+        mDevices = new ArrayList<BluetoothDevice>();
+
+        Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+        startActivity(enableBtIntent);
 
         loadPermissions(Manifest.permission.ACCESS_FINE_LOCATION,REQUEST_FINE_LOCATION);
 
@@ -62,6 +72,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onScanFailed(int errorCode) {
+                Log.d(TAG, "onScanFailed " + errorCode);
             }
 
             private void processResult(ScanResult result) {
@@ -71,18 +82,66 @@ public class MainActivity extends Activity {
                 processScanResult(device, result.getRssi(), result.getScanRecord().getBytes());
             }
         };
+
+        mCountDownTimer = new CountDownTimer(60000, 1) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                // nothing
+            }
+            @Override
+            public void onFinish() {
+                Log.i(TAG, "onFinish");
+                dumpCachedDevicesToLog();
+                recreate();
+            }
+        };
+        mCountDownTimer.start();
+    }
+
+    private void cacheDevice(BluetoothDevice device) {
+        boolean found = false;
+        for (BluetoothDevice dev : mDevices) {
+            if (dev.getAddress().equals(device.getAddress())) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            mDevices.add(device);
+        }
+    }
+
+    private void dumpCachedDevicesToLog() {
+        int i = 0;
+        for (BluetoothDevice dev : mDevices) {
+            String str = "cachedDevices " + mDevices.get(i).getAddress() + " " + mDevices.get(i).getName();
+            writeToFile(this, "scan.txt", str + "\n");
+            i++;
+        }
+        mDevices.clear();
     }
 
     private void processScanResult(final BluetoothDevice device, int rssi, byte[] scanRecord) {
         String str = "processScanResult " + device.getAddress() + " " + device.getName() + " rssi: " + Integer.valueOf(rssi);
         Log.v(TAG, str);
-        writeToFile(this, "scan.txt", str + "\n");
+        cacheDevice(device);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy");
+
+        if (null != mBluetoothLeScanner) {
+            mBluetoothLeScanner.stopScan(mScanCallback);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG, "onPause");
     }
 
     @Override
@@ -94,8 +153,11 @@ public class MainActivity extends Activity {
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
                 .build();
 
-        mBluetoothLeScanner.startScan(null, settings, mScanCallback);
-        writeToFile(this, "scan.txt", "startScan" + "\n");
+        if (null != mBluetoothLeScanner) {
+            mBluetoothLeScanner.startScan(null, settings, mScanCallback);
+        } else {
+            Log.e(TAG, "No bluetooth");
+        }
     }
 
     private void loadPermissions(String perm,int requestCode) {
